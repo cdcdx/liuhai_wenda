@@ -140,6 +140,77 @@ def validate_email(email: str) -> bool:
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+def generate_random_sfzid():
+    """
+    随机生成一个符合规则的身份证号码
+    
+    身份证号码构成：
+    1-6位：地址码
+    7-14位：出生日期码 YYYYMMDD
+    15-17位：顺序码，奇数为男，偶数为女
+    18位：校验码
+    """
+    import random
+    from datetime import datetime, timedelta
+    
+    # 常用地址码列表（部分）
+    address_codes = [
+        "110000", "120000", "130000", "140000", "150000",  # 北京、天津、河北、山西、内蒙古
+        "210000", "220000", "230000",                      # 辽宁、吉林、黑龙江
+        "310000", "320000", "330000", "340000", "350000", "360000", "370000",  # 上海、江苏、浙江、安徽、福建、江西、山东
+        "410000", "420000", "430000", "440000", "450000", "460000",            # 河南、湖北、湖南、广东、广西、海南
+        "500000", "510000", "520000", "530000", "540000",                      # 重庆、四川、贵州、云南、西藏
+        "610000", "620000", "630000", "640000", "650000",                      # 陕西、甘肃、青海、宁夏、新疆
+        "810000", "820000"                                                     # 香港、澳门
+    ]
+    
+    # 随机选择一个地址码
+    address_code = random.choice(address_codes)
+    
+    # 生成随机出生日期 (1950-01-01 到 2005-12-31)
+    start_date = datetime(1950, 1, 1)
+    end_date = datetime(2005, 12, 31)
+    random_date = start_date + timedelta(
+        days=random.randint(0, (end_date - start_date).days)
+    )
+    birth_date = random_date.strftime("%Y%m%d")
+    
+    # 生成顺序码 (15-17位)
+    order_code = f"{random.randint(0, 999):03d}"
+    
+    # 构造前17位
+    id_without_check = address_code[:6] + birth_date + order_code
+    
+    # 计算校验码
+    check_code = calculate_check_digit(id_without_check)
+    
+    # 返回完整的身份证号码
+    return id_without_check + check_code
+
+def calculate_check_digit(id_number):
+    """
+    根据身份证前17位计算第18位校验码
+    
+    Args:
+        id_number: 身份证前17位
+        
+    Returns:
+        校验码 (0-9 或 X)
+    """
+    # 加权因子
+    weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+    
+    # 校验码对应表
+    check_codes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2']
+    
+    # 计算加权和
+    sum_value = 0
+    for i in range(17):
+        sum_value += int(id_number[i]) * weights[i]
+    
+    # 取模并返回对应的校验码
+    return check_codes[sum_value % 11]
+
 # ------------------------------------------------------
 
 def check_ssl_files(certfile, keyfile):

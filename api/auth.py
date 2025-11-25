@@ -280,8 +280,8 @@ async def login(post_request: AuthLoginRequest, cursor=Depends(get_db)):
             logger.error(f"STATUS: 401 ERROR: Invalid username - {username}")
             return {"code": 401, "success": False, "msg": "Invalid username"}
 
-        logger.debug(f"username: {username} password: {password.encode("utf-8")} existing_user['password']: {existing_user['password'].encode("utf-8")}")
-        if bcrypt.checkpw(password.encode("utf-8"), existing_user['password'].encode("utf-8"),):
+        logger.debug(f'username: {username} password: {password.encode("utf-8")} existing_user["password"]: {existing_user["password"].encode("utf-8")}')
+        if bcrypt.checkpw(password.encode("utf-8"), existing_user["password"].encode("utf-8"),):
             logger.debug(f"jwt_secret: {md58(existing_user['password'])}")
             expire_timestamp = int(time.time()) + JWT_CONFIG['expire']
             access_token = create_access_token({

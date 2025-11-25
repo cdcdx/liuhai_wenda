@@ -28,7 +28,7 @@ except ImportError:
 
 from utils.db import get_db
 from utils.log import log as logger
-from utils.local import is_base58_encoded, is_base58_encoded_regex, validate_sfzid, validate_email, generate_register_code
+from utils.local import is_base58_encoded, is_base58_encoded_regex, validate_sfzid, generate_random_sfzid, validate_email, generate_register_code
 from utils.security import get_current_userid, get_interface_userid
 from config import *
 
@@ -151,8 +151,11 @@ async def import_csv_name(file: UploadFile = File(...), userid: Dict = Depends(g
             try:
                 status = int(parts[5])
             except ValueError:
-                logger.error(f"Invalid status: {parts[5]} line: {line}")
-                return {"code": 400, "success": False, "msg": f"Invalid status: {parts[5]} line: {line}"}
+                status = 1
+                # logger.error(f"Invalid status: {parts[5]} line: {line}")
+                # return {"code": 400, "success": False, "msg": f"Invalid status: {parts[5]} line: {line}"}
+            if sfzid == '' or sfzid == '0':
+                sfzid = generate_random_sfzid()
 
             # 检查是否已存在相同sfzid的记录
             check_values = (sfzid,)
@@ -281,6 +284,17 @@ async def modify_name(post_request: NameRequest, id: int|None=0, userid: Dict = 
         if result[0] == 0:
             logger.error(f"modify_name - ERROR: Name not found - sfzid: {sfzid}, name: {name}")
             return {"code": 400, "success": False, "msg": "Name not found"}
+        
+        # 查询语句
+        check_query = "SELECT id FROM wenda_names WHERE sfzid=%s"
+        if DB_ENGINE == "sqlite": check_query = check_query.replace('%s', '?')
+        check_values = (sfzid,)
+        logger.debug(f"check_query: {check_query}, values: {check_values}")
+        await cursor.execute(check_query, check_values)
+        result = await cursor.fetchone()
+        if result is not None and result[0] != id:
+            logger.error(f"modify_name - ERROR: sfzid already exists - sfzid: {sfzid}, name: {name}")
+            return {"code": 400, "success": False, "msg": "sfzid already exists"}
         
         # 更新记录
         update_query = "UPDATE wenda_names SET name=%s,sfzid=%s,email=%s,phone=%s,address=%s,status=%s WHERE id=%s"
@@ -467,8 +481,9 @@ async def import_csv_topic(file: UploadFile = File(...), userid: Dict = Depends(
             try:
                 status = int(parts[7])
             except ValueError:
-                logger.error(f"Invalid status: {parts[7]} line: {line}")
-                return {"code": 400, "success": False, "msg": f"Invalid status: {parts[7]} line: {line}"}
+                status = 1
+                # logger.error(f"Invalid status: {parts[7]} line: {line}")
+                # return {"code": 400, "success": False, "msg": f"Invalid status: {parts[7]} line: {line}"}
 
             if len(parts[5].split('|')) != len(parts[6].split('|')):
                 logger.error(f"add_question - ERROR: Options length mismatch - options: {options}, rates: {rates}")
@@ -752,7 +767,7 @@ async def clear_topic(topicid: int|None=1, pwd: str|None='', userid: Dict = Depe
 
 # surveys
 @router.get("/surveys")
-async def get_surveys(cursor=Depends(get_db)):
+async def get_surveys(userid: Dict = Depends(get_interface_userid), cursor=Depends(get_db)):
     """获取调查批次"""
     logger.info(f"/api/surveys")
 
@@ -781,7 +796,7 @@ async def get_surveys(cursor=Depends(get_db)):
 
 # records
 @router.get("/records/{survey}") # ?page=1&limit=10
-async def get_records_survey(survey: str|None='', page: int | None = 1, limit: int | None = 10, cursor=Depends(get_db)):
+async def get_records_survey(survey: str|None='', page: int | None = 1, limit: int | None = 10, userid: Dict = Depends(get_interface_userid), cursor=Depends(get_db)):
     """获取指定批次的调查记录"""
     logger.info(f"/api/records/{survey}")
     try: 
@@ -913,7 +928,7 @@ async def delete_records_survey(survey: str|None='', userid: Dict = Depends(get_
 
 # generate records survey
 @router.get("/record/generate") # ?topicid=x&number=x&start=x&end=x
-async def generate_records_survey(topicid: int | None = 1, number: int | None = 10, start: int | None = 0, end: int | None = 0, cursor=Depends(get_db)):
+async def generate_records_survey(topicid: int | None = 1, number: int | None = 10, start: int | None = 0, end: int | None = 0, userid: Dict = Depends(get_interface_userid), cursor=Depends(get_db)):
     """生成调查记录"""
     logger.info(f"/api/record/generate")
     
@@ -968,9 +983,9 @@ async def generate_records_survey(topicid: int | None = 1, number: int | None = 
         if people_count == 0:
             logger.error(f"generate survey - ERROR: No people")
             return {"code": 400, "success": False, "msg": "No people"}
-        if number > people_count:
-            logger.error(f"generate survey - ERROR: The name list is insufficient, containing only {people_count} people.")
-            return {"code": 400, "success": False, "msg": f"The name list is insufficient, containing only {people_count} people."}
+        # if number > people_count:
+        #     logger.error(f"generate survey - ERROR: The name list is insufficient, containing only {people_count} people.")
+        #     return {"code": 400, "success": False, "msg": f"The name list is insufficient, containing only {people_count} people."}
 
         # 查询所有姓名
         check_query = "SELECT id,name,sfzid,email,phone,address FROM wenda_names WHERE status = 1 ORDER BY id ASC"
@@ -999,12 +1014,8 @@ async def generate_records_survey(topicid: int | None = 1, number: int | None = 
         insert_query = "INSERT INTO wenda_survey_records (nameid,name,topicid,topic,survey,survey_data,survey_ip,status,created_time) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         if DB_ENGINE == "sqlite": insert_query = insert_query.replace('%s','?')
 
-        count=0
-        for data_id, data in people_list_pairs: # people_list随机乱序
-            count+=1
-            if count > number:
-                break
-            
+        for count in range(number):
+            _, data = random.choice(people_list_pairs) # 随机选择上传人
             nameid = data['id']
             name = data['name']
             logger.debug(f"id: {count} nameid: {nameid} | name: {name}")
@@ -1177,7 +1188,7 @@ async def delete_record_id(id: int|None=0, userid: Dict = Depends(get_interface_
 # ------------------------------------------- export -------------------------------------------
 
 @router.get("/export/{survey}/pdf")
-async def export_survey_to_pdf(survey: str, cursor=Depends(get_db)):
+async def export_survey_to_pdf(survey: str, userid: Dict = Depends(get_interface_userid), cursor=Depends(get_db)):
     """将指定批次的调查记录导出为PDF文件"""
     logger.info(f"/api/export/survey/{survey}/pdf")
     
