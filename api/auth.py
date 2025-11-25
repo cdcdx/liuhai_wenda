@@ -181,7 +181,7 @@ async def register(post_request: AuthRegiterRequest, background_tasks: Backgroun
                 "expire": expire_timestamp,
             })
         logger.debug(f"verify_token: {verify_token}")
-        verify_url = APP_CONFIG['apibase'] + "/api/validate/token?token=" + verify_token
+        verify_url = APP_CONFIG["apibase"] + "/api/validate/token?token=" + verify_token
         logger.info(f"verify_url: {verify_url}")
 
         ## Send activation email
