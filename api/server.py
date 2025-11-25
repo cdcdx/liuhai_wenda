@@ -1338,10 +1338,10 @@ async def export_survey_to_pdf(survey: str, userid: Dict = Depends(get_interface
             title = Paragraph(f"《{topic}》问卷调查表", title_style)
             elements.append(title)
             
-            # 添加姓名
-            name_text = f"调查人: {record['name']}"
-            name_para = Paragraph(name_text, name_style)
-            elements.append(name_para)
+            # # 添加姓名
+            # name_text = f"调查人: {record['name']}"
+            # name_para = Paragraph(name_text, name_style)
+            # elements.append(name_para)
             
             # 添加问题和答案
             for i, (question, answer) in enumerate(zip(question_list, record['survey_data']), 1):
