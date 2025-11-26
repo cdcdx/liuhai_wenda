@@ -1293,7 +1293,9 @@ async def export_survey_to_pdf(survey: str, userid: Dict = Depends(get_interface
         font_name = chinese_font_name if chinese_font_registered else 'Helvetica'
         
         # 创建PDF文档
-        doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+        doc = SimpleDocTemplate(pdf_path, pagesize=A4, 
+                                leftMargin=32, rightMargin=32, 
+                                topMargin=32, bottomMargin=32)
         elements = []
         
         # 确保所有样式都使用相同的字体
@@ -1310,7 +1312,8 @@ async def export_survey_to_pdf(survey: str, userid: Dict = Depends(get_interface
             parent=styles['Heading1'],
             alignment=TA_CENTER,
             fontSize=18,
-            spaceAfter=20,
+            spaceAfter=32,
+            textColor=colors.HexColor("#1f2937")
         )
         title_style.fontName = font_name
         
@@ -1319,52 +1322,154 @@ async def export_survey_to_pdf(survey: str, userid: Dict = Depends(get_interface
         normal_style.leading = 14
         normal_style.fontName = font_name
         
-        name_style = ParagraphStyle(
-            'Name',
-            parent=normal_style,
-            alignment=TA_CENTER,
-            fontSize=14,
-            spaceAfter=16,
-        )
+        # name_style = ParagraphStyle(
+        #     'Name',
+        #     parent=normal_style,
+        #     alignment=TA_CENTER,
+        #     fontSize=16,
+        #     spaceAfter=24,
+        #     textColor=colors.HexColor("#1f2937")
+        # )
+        
         question_style = ParagraphStyle(
             'Question',
             parent=normal_style,
-            spaceAfter=8,
+            fontSize=12,
+            leading=16,
+            spaceAfter=6,
+            fontWeight='bold'
+        )
+        
+        option_style = ParagraphStyle(
+            'Option',
+            parent=normal_style,
+            fontSize=11,
+            leading=14,
+            # leftIndent=20,
+            spaceAfter=8
         )
         
         # 为每个调查记录生成一页
-        for record in record_list:
+        for record_index, record in enumerate(record_list):
             # 添加标题
-            title = Paragraph(f"《{topic}》问卷调查表", title_style)
+            title = Paragraph(f"《{record['topic']}》问卷调查表", title_style)
             elements.append(title)
             
-            # # 添加姓名
-            # name_text = f"调查人: {record['name']}"
-            # name_para = Paragraph(name_text, name_style)
-            # elements.append(name_para)
+            # # 添加调查人姓名（带隐私保护）
+            # if record['name']:
+            #     # 姓名脱敏：保留第一个字符，其余用*代替
+            #     masked_name = record['name'][0] + '*' * (len(record['name']) - 1) if len(record['name']) > 1 else record['name']
+            #     name_text = Paragraph(f"{masked_name}", name_style)
+            #     elements.append(name_text)
+            # elements.append(Spacer(1, 16))
             
             # 添加问题和答案
             for i, (question, answer) in enumerate(zip(question_list, record['survey_data']), 1):
-                # 格式化选项
-                options_text = ""
+                # 问题文本
+                question_text = Paragraph(f"{i}. {question['question']}", question_style)
+                elements.append(question_text)
+                elements.append(Spacer(1, 4))
+                
+                # 显示选项
                 if 'options' in question and question['options']:
                     option_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
                     options = question['options']
+                    
+                    # 计算每行可以容纳的选项数量
+                    # 根据选项内容长度动态确定每行放置的选项数
+                    option_texts = []
                     for j, option in enumerate(options):
                         if j < len(option_letters):
-                            if option == answer:
-                                options_text += f"<font color='#4682B4'>{option_letters[j]}、{option}</font>&nbsp;&nbsp;"
+                            # 检查当前选项是否被选中
+                            is_selected = False
+                            if isinstance(answer, list):  # 多选题
+                                is_selected = option in answer
+                            else:  # 单选题
+                                is_selected = option == answer
+                            # 根据选项类型和是否选中显示不同标记
+                            if is_selected:
+                                option_mark = "<font color='#4682B4' size='16'>●</font>"  # 实心圆点
                             else:
-                                options_text += f"{option_letters[j]}、{option}&nbsp;&nbsp;"
+                                option_mark = "<font size='16'>○</font>"  # 空心圆点
+                            # 选项文本
+                            option_text = Paragraph(f"{option_mark} {option_letters[j]}. {option}", option_style)
+                            option_texts.append(option_text)
+                    
+                    # # 动态分配每行的选项数量
+                    # option_rows = []
+                    # if len(option_texts) <= 2:
+                    #     # 如果选项数小于等于2，放在一行
+                    #     option_rows.append(option_texts)
+                    # elif len(option_texts) <= 4:
+                    #     # 如果选项数3-4个，分成两行
+                    #     mid = len(option_texts) // 2 + len(option_texts) % 2
+                    #     option_rows.append(option_texts[:mid])
+                    #     option_rows.append(option_texts[mid:])
+                    # else:
+                    #     # 如果选项数大于4个，每行最多3个
+                    #     for k in range(0, len(option_texts), 3):
+                    #         option_rows.append(option_texts[k:k+3])
+                    
+                    # 动态分配每行的选项数量 - 根据选项文字长度智能分配
+                    option_rows = []
+                    # 计算每个选项的大致宽度（基于字符数）
+                    option_widths = []
+                    for option in options:
+                        # 估算选项宽度：中文字符占2个单位，英文和其他字符占1个单位
+                        width = 0
+                        for char in option:
+                            if ord(char) > 127:  # 非ASCII字符（如中文）
+                                width += 2
+                            else:  # ASCII字符（如英文、数字）
+                                width += 1
+                        # 加上选项标记和字母的空间（约10个字符宽度）
+                        width += 10
+                        option_widths.append(width)
+                    # 根据选项宽度智能分配行数
+                    max_row_width = 80  # 每行最大宽度（可根据实际效果调整）
+                    current_row = []
+                    current_width = 0
+                    for idx, (option_text, width) in enumerate(zip(option_texts, option_widths)):
+                        # 如果加上当前选项会超出最大宽度，或者这一行已经有5个选项了，则换行
+                        if current_width + width > max_row_width or len(current_row) >= 5:
+                            if current_row:  # 避免添加空行
+                                option_rows.append(current_row)
+                                current_row = []
+                                current_width = 0
+                        current_row.append(option_text)
+                        current_width += width
+                    # 添加最后一行
+                    if current_row:
+                        option_rows.append(current_row)
+                    
+                    # 补齐每行的空位，确保表格整齐
+                    max_cols = max(len(row) for row in option_rows) if option_rows else 0
+                    for row in option_rows:
+                        while len(row) < max_cols:
+                            row.append(Paragraph("", option_style))
+                    # 使用表格展示选项，实现横向排列
+                    if option_rows:
+                        # 根据列数自动计算列宽
+                        col_width = 500 // max_cols if max_cols > 0 else 250
+                        col_widths = [col_width] * max_cols
+                        option_table = Table(option_rows, colWidths=col_widths)
+                        option_table.setStyle(TableStyle([
+                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                            ('FONTNAME', (0, 0), (-1, -1), font_name),
+                            ('FONTSIZE', (0, 0), (-1, -1), 11),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                            ('TOPPADDING', (0, 0), (-1, -1), 0),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                        ]))
+                        elements.append(option_table)
+                    elements.append(Spacer(1, 4))
                 
-                # 构造文本
-                question_text = f"<b>{i}. {question['question']}</b><br/>{options_text}<br/>"
-                question_para = Paragraph(question_text, question_style)
-                elements.append(question_para)
-                elements.append(Spacer(1, 12))
+                # 添加分隔空间
+                elements.append(Spacer(1, 8))
             
             # 添加分页符（除了最后一页）
-            if record != record_list[-1]:
+            if record_index < len(record_list) - 1:
                 elements.append(PageBreak())
         
         # 构建PDF
