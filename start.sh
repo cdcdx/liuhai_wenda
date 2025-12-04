@@ -33,7 +33,8 @@ check_port() {
         # macOS系统
         echo -e "\033[34m netstat -anp tcp -v | grep \".$port \" |awk '{print \$11}' |head -n 1 \033[0m"
         temp=$(netstat -anp tcp -v | grep ".$port " |awk '{print $11}' |head -n 1)
-        pid=${temp%/*}
+        pid_info=${temp%/*}
+        pid=${pid_info#*:}
     else
         # Linux系统
         echo -e "\033[34m netstat -tlpn | grep \":$port \" |grep -v \"grep\" |awk '{print \$7}' |head -n 1 \033[0m"
