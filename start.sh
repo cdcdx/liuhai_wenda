@@ -33,8 +33,8 @@ check_port() {
         # macOS系统
         echo -e "\033[34m netstat -anp tcp -v | grep \".$port \" |awk '{print \$11}' |head -n 1 \033[0m"
         temp=$(netstat -anp tcp -v | grep ".$port " |awk '{print $11}' |head -n 1)
-        pid_info=${temp%/*}
-        pid=${pid_info#*:}
+        temp=${temp%/*}
+        pid=${temp#*:}
     else
         # Linux系统
         echo -e "\033[34m netstat -tlpn | grep \":$port \" |grep -v \"grep\" |awk '{print \$7}' |head -n 1 \033[0m"
@@ -110,6 +110,7 @@ case "$1" in
             
             if [ "$(uname)" == "Darwin" ]; then
                 temp=$(netstat -anp tcp -v | grep ".$UVICORN_PORT " | awk '{print $11}' | sort | uniq | tr '\n' ' ')
+                temp=${temp#*:}
                 echo -e "\033[34m kill $temp \033[0m"
                 [ -n "$temp" ] && kill $temp
             else
@@ -139,7 +140,7 @@ case "$1" in
             echo "Virtual Environment Activation..."
             source .venv/bin/activate
             echo "Launching $PROCESS_MAIN ..."
-            python3 $PROCESS_MAIN $2 $3 $4 $5 $6
+            python3 $PROCESS_MAIN ${@:2}
         else
             echo -e "\033[31m Port: $UVICORN_PORT is exist. \033[0m"
         fi
@@ -152,7 +153,7 @@ case "$1" in
             echo "Virtual Environment Activation..."
             source .venv/bin/activate
             echo "Launching $PROCESS_MAIN ..."
-            nohup python3 $PROCESS_MAIN $1 $2 $3 $4 $5 $6 > log-main.log 2>&1 &
+            nohup python3 $PROCESS_MAIN $@ > log-main.log 2>&1 &
         else
             echo -e "\033[31m Port: $UVICORN_PORT is exist. \033[0m"
         fi
